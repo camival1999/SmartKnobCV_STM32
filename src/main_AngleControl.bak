@@ -1,0 +1,108 @@
+/**
+ * Position/angle motion control example — SmartKnob STM32
+ *
+ * Hardware:
+ *   MCU:     Nucleo L452RE (STM32L452RET6)
+ *   Sensor:  MT6701 magnetic encoder via SSI (SimpleFOCDrivers)
+ *   Driver:  3-PWM BLDC driver
+ *
+ * Steps:
+ *   1) Wire the motor, driver, and MT6701 sensor
+ *   2) Upload this sketch
+ *   3) Open Serial Monitor (115200, newline termination)
+ *   4) Send a target angle in radians, e.g.  T3.14
+ *
+ * Wiring (MT6701 SSI):
+ *   PA5  → MT6701 CLK   (SPI1_SCK)
+ *   PA6  ← MT6701 DO    (SPI1_MISO)
+ *   PB6  → MT6701 CSN   (GPIO chip-select)
+ *
+ * Wiring (BLDC driver — SimpleFOCShield):
+ *   PB10 → Phase A PWM   (Arduino D6,  TIM2_CH3)
+ *   PC7  → Phase B PWM   (Arduino D9,  TIM3_CH2)
+ *   PB4  → Phase C PWM   (Arduino D5,  TIM3_CH1)
+ *   PA9  → Enable         (Arduino D8,  GPIO)
+ */
+
+#include <SimpleFOC.h>
+#include "SimpleFOCDrivers.h"
+#include "encoders/MT6701/MagneticSensorMT6701SSI.h"
+
+// ======================== Sensor ========================
+#define SENSOR_CS PB6
+MagneticSensorMT6701SSI sensor(SENSOR_CS);
+
+// ======================== Motor & Driver ========================
+// BLDCMotor(pole_pairs)  — adjust to YOUR motor!
+BLDCMotor motor = BLDCMotor(7);
+// BLDCDriver3PWM(pwmA, pwmB, pwmC, enable)  — adjust to YOUR driver pins!
+BLDCDriver3PWM driver = BLDCDriver3PWM(PB10, PC7, PB4, PA9);
+
+// ======================== Commander ========================
+float target_angle = 0;
+Commander command = Commander(Serial);
+void doTarget(char* cmd) { command.scalar(&target_angle, cmd); }
+
+// ======================== Setup ========================
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  // Enable verbose debug output (comment out if not needed)
+  SimpleFOCDebug::enable(&Serial);
+
+  // --- Sensor ---
+  sensor.init();
+  motor.linkSensor(&sensor);
+
+  // --- Driver ---
+  driver.voltage_power_supply = 12;   // Power supply voltage [V]
+  driver.init();
+  motor.linkDriver(&driver);
+
+  // --- FOC config ---
+  motor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  motor.controller = MotionControlType::angle;
+
+  // Velocity PID
+  motor.PID_velocity.P = 0.8f;
+  motor.PID_velocity.I = 0;
+  motor.PID_velocity.D = 0;
+  motor.voltage_limit = 12;             // Max voltage to motor [V]
+
+  // Velocity low-pass filter
+  motor.LPF_velocity.Tf = 0.01f;
+
+  // Angle P controller
+  motor.P_angle.P = 20;
+  motor.velocity_limit = 50;           // Max velocity for position control [rad/s]
+
+  // Monitoring (comment out if not needed)
+  motor.useMonitoring(Serial);
+
+  // --- Initialize ---
+  motor.init();
+  motor.initFOC();
+
+  // --- Commander ---
+  command.add('T', doTarget, "target angle");
+
+  Serial.println(F("Motor ready."));
+  Serial.println(F("Set the target angle using serial terminal:"));
+  _delay(1000);
+}
+
+// ======================== Loop ========================
+void loop() {
+  // FOC algorithm — run as fast as possible (>1 kHz)
+  motor.loopFOC();
+
+  // Motion control (position mode → target_angle in radians)
+  motor.move(target_angle);
+
+  // Uncomment for real-time variable plotting (slows loop significantly!)
+  // motor.monitor();
+
+  // Process serial commands
+  command.run();
+}

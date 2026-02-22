@@ -1,0 +1,12 @@
+# SmartKnob Simple GUI Dependencies
+# Install with: pip install -r requirements.txt
+
+# Serial communication with STM32
+pyserial>=3.5
+
+# Windows volume control (requires comtypes as dependency)
+pycaw>=20230407
+comtypes>=1.2.0
+
+# Brightness control via WMI (Windows only)
+wmi>=1.5.1

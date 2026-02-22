@@ -1,0 +1,136 @@
+/**
+ * Full control example — SmartKnob STM32
+ *
+ * Hardware:
+ *   MCU:     Nucleo L452RE (STM32L452RET6)
+ *   Sensor:  MT6701 magnetic encoder via SSI (SimpleFOCDrivers)
+ *   Driver:  3-PWM BLDC driver
+ *
+ * Steps:
+ *   1) Wire the motor, driver, and MT6701 sensor
+ *   2) Upload this sketch
+ *   3) Open Serial Monitor (115200, newline termination)
+ *   4) Send a target angle in radians, e.g.  T3.14
+ *
+ * Wiring (MT6701 SSI):
+ *   PA5  → MT6701 CLK   (SPI1_SCK)
+ *   PA6  ← MT6701 DO    (SPI1_MISO)
+ *   PB6  → MT6701 CSN   (GPIO chip-select)
+ *
+ * Wiring (BLDC driver — SimpleFOCShield):
+ *   PB10 → Phase A PWM   (Arduino D6,  TIM2_CH3)
+ *   PC7  → Phase B PWM   (Arduino D9,  TIM3_CH2)
+ *   PB4  → Phase C PWM   (Arduino D5,  TIM3_CH1)
+ *   PA9  → Enable         (Arduino D8,  GPIO)
+ */
+
+#include <SimpleFOC.h>
+#include "SimpleFOCDrivers.h"
+#include "encoders/MT6701/MagneticSensorMT6701SSI.h"
+
+// ======================== Sensor ========================
+#define SENSOR_CS PB6
+MagneticSensorMT6701SSI sensor(SENSOR_CS);
+
+// ======================== Motor & Driver ========================
+// BLDCMotor(pole_pairs)  — adjust to YOUR motor!
+BLDCMotor motor = BLDCMotor(7);
+// BLDCDriver3PWM(pwmA, pwmB, pwmC, enable)  — adjust to YOUR driver pins!
+BLDCDriver3PWM driver = BLDCDriver3PWM(PB10, PC7, PB4, PA9);
+
+// inline current sensor instance
+// ACS712-05B has the resolution of 0.185mV per Amp
+//InlineCurrentSense current_sense = InlineCurrentSense(185.0f, A0, A2); //Arduino definitions
+InlineCurrentSense current_sense = InlineCurrentSense(185.0f, PA0, PA4); //STM32 definitions
+
+// commander communication instance
+Commander command = Commander(Serial);
+void doMotion(char* cmd){ command.motion(&motor, cmd); }
+void doMotor(char* cmd){ command.motor(&motor, cmd); }
+
+void setup() {
+
+  // use monitoring with serial 
+  Serial.begin(115200);
+  // enable more verbose output for debugging
+  // comment out if not needed
+  SimpleFOCDebug::enable(&Serial);
+
+  // initialize encoder sensor hardware
+  sensor.init();
+  // encoder.enableInterrupts(doA, doB);
+  // link the motor to the sensor
+  // motor.linkSensor(&encoder);
+  motor.linkSensor(&sensor);
+  // driver config
+  // power supply voltage [V] — set to your ACTUAL supply!
+  driver.voltage_power_supply = 12;
+  driver.init();
+  // link driver
+  motor.linkDriver(&driver);
+  // link current sense and the driver
+  current_sense.linkDriver(&driver);
+
+  // set control loop type to be used
+  motor.controller = MotionControlType::torque;
+
+  // controller configuration based on the control type
+  motor.PID_velocity.P = 0.5f;
+  motor.PID_velocity.I = 1;
+  motor.PID_velocity.D = 0;
+  // motor voltage limit — keep well below voltage_power_supply!
+  motor.voltage_limit =8;
+
+  // voltage used during current-sense alignment
+  // ACS712 needs enough current to produce a measurable signal
+  motor.voltage_sensor_align = 5;
+
+  // velocity low pass filtering time constant
+  motor.LPF_velocity.Tf = 0.01f;
+
+  // angle loop controller
+  motor.P_angle.P = 20;
+  // angle loop velocity limit
+  motor.velocity_limit = 20;
+
+  // comment out if not needed
+  motor.useMonitoring(Serial);
+  motor.monitor_downsample = 0; // disable intially
+  motor.monitor_variables = _MON_TARGET | _MON_VEL | _MON_ANGLE; // monitor target velocity and angle
+
+  // current sense init and linking
+  current_sense.init();
+  motor.linkCurrentSense(&current_sense);
+
+  // initialise motor
+  motor.init();
+  // align encoder and start FOC
+  motor.initFOC();
+
+  // set the inital target value
+  motor.target = 0;
+
+  // subscribe motor to the commander
+  command.add('T', doMotion, "motion control");
+  command.add('M', doMotor, "motor");
+  
+  // Run user commands to configure and the motor (find the full command list in docs.simplefoc.com)
+  Serial.println("Motor ready.");
+
+  _delay(1000);
+}
+
+
+void loop() {
+  // iterative setting FOC phase voltage
+  motor.loopFOC();
+
+  // iterative function setting the outter loop target
+  motor.move();
+
+  // motor monitoring
+  motor.monitor();
+
+  // user communication
+  command.run();
+}

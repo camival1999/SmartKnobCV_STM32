@@ -1,0 +1,139 @@
+#include <Arduino.h>
+#include <SPI.h>
+
+// =============================================================================
+// MT6701 Magnetic Encoder — SSI via Hardware SPI
+// =============================================================================
+// The MT6701 at I2C address 0x06 falls in the reserved range and does not
+// behave reliably on STM32 I2C peripherals. SSI (read over SPI) is used instead.
+//
+// Wiring (Nucleo L452RE → MT6701):
+//   PA5  → MT6701 pin 2 (CLK)    SPI1_SCK
+//   PA6  ← MT6701 pin 3 (DO)     SPI1_MISO  (data from sensor)
+//   PB6  → MT6701 pin 1 (CSN)    GPIO chip-select (active LOW)
+//   PA7    SPI1_MOSI — leave unconnected (SSI is read-only)
+//
+// NOTE: PA5 is also LED_BUILTIN on the Nucleo L452RE, so the on-board LED
+//       cannot blink while SPI1 is in use. If you need the LED, switch to
+//       SPI2 (PB13=SCK, PB14=MISO, PB15=MOSI) and update the SPI instance.
+//
+// NOTE: The MT6701 must be configured for SSI output mode via its internal
+//       registers (ABZ_MUX field). If it is currently in I2C/ABZ mode, use
+//       an ESP32 or Arduino to program it to SSI mode first.
+// =============================================================================
+
+// -- Pin Definitions --
+#define SSI_CS  PB6   // Chip-select (GPIO) → MT6701 CSN (active LOW)
+// SPI1 default pins used automatically by SPI.begin():
+//   PA5 = SCK   → MT6701 CLK
+//   PA6 = MISO  ← MT6701 DO
+//   PA7 = MOSI  (unused, leave unconnected)
+
+// -- SPI Settings --
+// MT6701 SSI per datasheet (Figure 24):
+//   - CLK idles LOW                                      → CPOL = 0
+//   - Sensor shifts data on rising edge of CLK
+//   - Master captures data on falling edge of CLK         → CPHA = 1
+//   - That maps to SPI MODE 1 (CPOL=0, CPHA=1).
+SPISettings ssiSettings(1000000, MSBFIRST, SPI_MODE1);
+
+// =============================================================================
+// SSI Read — 24-bit frame: 14-bit angle + 4-bit status + 6-bit CRC
+// =============================================================================
+// Byte 0: D13 D12 D11 D10 D9 D8 D7 D6
+// Byte 1: D5  D4  D3  D2  D1 D0 Mg3 Mg2
+// Byte 2: Mg1 Mg0 CRC5 CRC4 CRC3 CRC2 CRC1 CRC0
+// =============================================================================
+uint8_t ssiBytes[3];  // Exposed for debug printing
+
+uint16_t readMT6701_SSI_Raw() {
+  SPI.beginTransaction(ssiSettings);
+
+  digitalWrite(SSI_CS, LOW);          // Latch current angle
+  delayMicroseconds(1);               // T_H: min 100 ns before first CLK rise
+
+  ssiBytes[0] = SPI.transfer(0x00);  // D[13:6]
+  ssiBytes[1] = SPI.transfer(0x00);  // D[5:0] + Mg[3:2]
+  ssiBytes[2] = SPI.transfer(0x00);  // Mg[1:0] + CRC[5:0]
+
+  digitalWrite(SSI_CS, HIGH);         // End SSI frame
+  SPI.endTransaction();
+
+  delayMicroseconds(20);              // Monoflop recovery
+
+  // 14-bit angle from bytes 0 and 1
+  uint16_t raw = ((uint16_t)ssiBytes[0] << 6) | (ssiBytes[1] >> 2);
+  return raw & 0x3FFF;
+}
+
+float readMT6701Angle() {
+  uint16_t raw = readMT6701_SSI_Raw();
+  return (raw / 16384.0f) * 360.0f;
+}
+
+// =============================================================================
+// Sanity check — read a few times and verify we're not stuck at 0 or 0x3FFF
+// =============================================================================
+bool verifyMT6701() {
+  uint16_t first = readMT6701_SSI_Raw();
+  bool allSame  = true;
+
+  for (int i = 0; i < 5; i++) {
+    delay(10);
+    uint16_t val = readMT6701_SSI_Raw();
+    if (val != first) allSame = false;
+  }
+
+  if (first == 0x0000 || first == 0x3FFF) {
+    Serial.println("[WARN] SSI reads all-zero or all-one — check wiring / mode.");
+    return false;
+  }
+
+  if (allSame) {
+    Serial.printf("[INFO] Sensor returns constant 0x%04X — may be valid if not moving.\n", first);
+  }
+
+  return true;
+}
+
+// -- Setup --
+void setup() {
+  Serial.begin(115200);
+  delay(3000);
+  Serial.println("=== MT6701 Encoder (SSI via Hardware SPI) ===");
+
+  // Chip-select pin — idle HIGH (inactive)
+  pinMode(SSI_CS, OUTPUT);
+  digitalWrite(SSI_CS, HIGH);
+
+  // Initialise SPI1 (uses PA5=SCK, PA6=MISO, PA7=MOSI by default)
+  SPI.begin();
+
+  Serial.println("Pins:  SCK=PA5  MISO=PA6  CS=PB6  (MOSI=PA7 unused)");
+  Serial.println("SPI Mode 1 (CPOL=0 CPHA=1), 1 MHz\n");
+
+  verifyMT6701();
+  Serial.println("Streaming angle data...\n");
+}
+
+// Helper: print a byte as 8 binary digits
+void printBin8(uint8_t val) {
+  for (int i = 7; i >= 0; i--) {
+    Serial.print((val >> i) & 1);
+  }
+}
+
+// -- Loop --
+void loop() {
+  uint16_t raw = readMT6701_SSI_Raw();
+  float angle = (raw / 16384.0f) * 360.0f;
+
+  // Print raw bytes as binary: [b0] [b1] [b2] | raw_val | degrees
+  printBin8(ssiBytes[0]);
+  Serial.print(' ');
+  printBin8(ssiBytes[1]);
+  Serial.print(' ');
+  printBin8(ssiBytes[2]);
+  Serial.printf("\t%u\t%.3f\n", raw, angle);
+  delay(50);
+}
