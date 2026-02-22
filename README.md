@@ -1,5 +1,11 @@
 # SmartKnob STM32 — Haptic BLDC Controller for Windows
 
+[![Platform](https://img.shields.io/badge/platform-STM32_Nucleo_L452RE-blue.svg)]()
+[![SimpleFOC](https://img.shields.io/badge/library-SimpleFOC_v2.4.0-brightgreen.svg)]()
+[![FOC](https://img.shields.io/badge/motor_control-FOC-orange.svg)]()
+[![Windows](https://img.shields.io/badge/integration-Windows-0078D6.svg)]()
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
+
 A haptic knob controller using an **STM32 Nucleo L452RE**, **MT6701 magnetic encoder**, **SimpleFOCShield V3.2**, and the **SimpleFOC library** for BLDC motor FOC control. Features **four switchable haptic modes**: detented wheel, inertial flywheel, spring-centered, and bounded rotation with hard stops.
 
 This project is a **proof of concept** for a smart knob that can dynamically adjust its haptic behavior and interact with PC applications. Current Windows integration includes **volume control**, **smooth scrolling**, **screen brightness**, and experimental **screen zoom**. The goal is to evolve this into more complex contextual controls.
@@ -7,6 +13,10 @@ This project is a **proof of concept** for a smart knob that can dynamically adj
 > **Project Evolution:** This started as a learning platform for SimpleFOC on STM32 and advanced haptic feedback techniques (explaining the detailed hardware documentation). It has since evolved into a dual-purpose project: (1) a **PC control proof-of-concept** using open-source libraries to prototype commercial applications, and (2) a **learning resource** for the STM32 platform, FOC, control theory, and haptic feedback.
 
 > **Why SSI instead of I2C?** The MT6701's I2C address is `0x06`, which falls in the I2C reserved address range (0x00–0x07). While ESP32/Arduino tolerate this, STM32 I2C peripherals strictly enforce the spec and refuse to communicate. SSI over hardware SPI is the reliable alternative, and ideally the use of a proper SPI peripheral would be recommended
+
+### Acknowledgments
+
+This project was inspired by [**Scott Bezek's SmartKnob**](https://github.com/scottbez1/smartknob) — an incredible open-source haptic input knob that sparked my interest in FOC motor control and haptic feedback. While this is not a fork (different MCU, different goals), Scott's work was the catalyst that got me into this field. Check out his project if you haven't already!
 
 ---
 
@@ -650,3 +660,15 @@ For mouse wheel simulation, use smooth scrolling (fractional scroll units) rathe
 - **Community Forum:** [community.simplefoc.com](https://community.simplefoc.com/)
 - **MT6701 Datasheet:** Search for "MT6701 MagnTek datasheet"
 - **GitHub (SimpleFOC):** [github.com/simplefoc/Arduino-FOC](https://github.com/simplefoc/Arduino-FOC)
+
+---
+
+## License
+
+This project is proprietary software. **All rights reserved.**
+
+- You may view this code for personal, educational reference
+- Commercial use, modification, and redistribution are **prohibited** without written permission
+- See [LICENSE](LICENSE) for full terms
+
+*Copyright (c) 2025 Camilo Valencia*
