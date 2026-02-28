@@ -19,6 +19,9 @@ env/
 __pycache__/
 *.pyd
 
+# Python package metadata (editable installs)
+*.egg-info/
+
 # IDE/Editor
 *.swp
 *.swo

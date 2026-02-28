@@ -136,7 +136,8 @@ Your role is Scribe. Follow the instructions in `.github/agents/scribe.agent.md`
 | `.github/` | AI agents, instructions, processes | Active |
 | `PoC/` | Proof of Concept — active development | Active |
 | `PoC/firmware/` | PlatformIO STM32 firmware (C++) | Active |
-| `PoC/software/` | Python package: driver, integrations, GUI | Active |
+| `PoC/software/smartknob/` | Cross-platform driver package (pyserial only) | Active |
+| `PoC/software/smartknob_windows/` | Windows app: GUI, integrations, context | Active |
 | `PoC/docs/` | Architecture, protocol spec, dev tracking | Active |
 | `FOC_Learnings/` | Learning path, firmware iterations | Archive |
 
@@ -154,7 +155,7 @@ Your role is Scribe. Follow the instructions in `.github/agents/scribe.agent.md`
 | **Build System** | PlatformIO (Arduino framework, STM32Duino) |
 | **Serial** | 115200 baud, ASCII text protocol |
 | **Python** | pyserial, pycaw, comtypes, wmi, tkinter |
-| **GUI** | Tkinter (PoC/software/gui/app.py) |
+| **GUI** | Tkinter (PoC/software/smartknob_windows/gui/app.py) |
 
 ---
 

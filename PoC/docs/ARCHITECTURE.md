@@ -5,32 +5,41 @@
 The SmartKnob PoC is a two-part system: **firmware** running on an STM32 Nucleo board that provides haptic motor control, and **software** running on a Windows PC that connects motor position to system functions.
 
 ```
-┌─────────────────────┐     Serial (115200)     ┌─────────────────────────────┐
-│   STM32 Firmware     │ ←────────────────────→ │       Windows Software       │
-│                      │                         │                              │
-│  ┌────────────────┐  │    Commands (PC→STM32)  │  ┌──────────────────────┐    │
-│  │   SimpleFOC    │  │    Position (STM32→PC)  │  │   SmartKnobDriver    │    │
-│  │   FOC Loop     │  │                         │  │   (serial comms)     │    │
-│  └───────┬────────┘  │                         │  └──────────┬───────────┘    │
-│          │           │                         │             │                │
-│  ┌───────▼────────┐  │                         │  ┌──────────▼───────────┐    │
-│  │  Haptic Modes  │  │                         │  │   WindowsLink        │    │
-│  │  - Detent      │  │                         │  │   (integration       │    │
-│  │  - Inertia     │  │                         │  │    orchestrator)     │    │
-│  │  - Spring      │  │                         │  └──────────┬───────────┘    │
-│  │  - Bounded     │  │                         │             │                │
-│  └───────┬────────┘  │                         │  ┌──────────▼───────────┐    │
-│          │           │                         │  │   Integrations       │    │
-│  ┌───────▼────────┐  │                         │  │   - Volume           │    │
-│  │    Comms       │  │                         │  │   - Brightness       │    │
-│  │  (Commander    │  │                         │  │   - Scroll           │    │
-│  │   + Protocol)  │  │                         │  │   - Zoom             │    │
-│  └────────────────┘  │                         │  └──────────────────────┘    │
-│                      │                         │                              │
-│  ┌────────────────┐  │                         │  ┌──────────────────────┐    │
-│  │  Button Input  │  │                         │  │   GUI (Tkinter)      │    │
-│  └────────────────┘  │                         │  └──────────────────────┘    │
-└──────────────────────┘                         └──────────────────────────────┘
+┌───────────────────────┐    Serial (115200)    ┌─────────────────────────────────────┐
+│   STM32 Firmware      │ ←──────────────────→ │            PC Software               │
+│   (PoC/firmware/)     │                       │                                      │
+│                       │  Commands (PC→STM32)  │  ┌────────────────────────────────┐  │
+│  ┌─────────────────┐  │  Position (STM32→PC)  │  │  smartknob (cross-platform)    │  │
+│  │  SimpleFOC      │  │                       │  │  ┌──────────────────────────┐  │  │
+│  │  FOC Loop       │  │                       │  │  │  SmartKnobDriver         │  │  │
+│  └────────┬────────┘  │                       │  │  │  (thread-safe serial,    │  │  │
+│           │           │                       │  │  │   callbacks, protocol)   │  │  │
+│  ┌────────▼────────┐  │                       │  │  └──────────────────────────┘  │  │
+│  │  Haptic Modes   │  │                       │  │  protocol.py  driver.py        │  │
+│  │  (haptics.cpp)  │  │                       │  └────────────────┬───────────────┘  │
+│  │  - Detent       │  │                       │                   │                  │
+│  │  - Inertia      │  │                       │  ┌────────────────▼───────────────┐  │
+│  │  - Spring       │  │                       │  │  smartknob_windows (Win only)  │  │
+│  │  - Bounded      │  │                       │  │  ┌──────────────────────────┐  │  │
+│  └────────┬────────┘  │                       │  │  │  WindowsLink             │  │  │
+│           │           │                       │  │  │  (integration            │  │  │
+│  ┌────────▼────────┐  │                       │  │  │   orchestrator)          │  │  │
+│  │  Comms          │  │                       │  │  └──────────┬───────────────┘  │  │
+│  │  (comms.cpp)    │  │                       │  │             │                  │  │
+│  │  Commander      │  │                       │  │  ┌──────────▼───────────────┐  │  │
+│  │  + Protocol     │  │                       │  │  │  Integrations            │  │  │
+│  └─────────────────┘  │                       │  │  │  - Volume  - Brightness  │  │  │
+│                       │                       │  │  │  - Scroll  - Zoom        │  │  │
+│  ┌─────────────────┐  │                       │  │  └──────────────────────────┘  │  │
+│  │  Button Input   │  │                       │  │                                │  │
+│  │  (button.cpp)   │  │                       │  │  ┌──────────────────────────┐  │  │
+│  └─────────────────┘  │                       │  │  │  GUI (Tkinter)           │  │  │
+│                       │                       │  │  └──────────────────────────┘  │  │
+│  ┌─────────────────┐  │                       │  │                                │  │
+│  │  Config         │  │                       │  │  config/ context/              │  │
+│  │  (config.h/cpp) │  │                       │  └────────────────────────────────┘  │
+│  └─────────────────┘  │                       │                                      │
+└───────────────────────┘                       └──────────────────────────────────────┘
 ```
 
 ## Data Flow
@@ -53,17 +62,36 @@ The SmartKnob PoC is a two-part system: **firmware** running on an STM32 Nucleo 
 
 ## Component Responsibilities
 
-| Component | Location | Responsibility |
-|-----------|----------|----------------|
-| SimpleFOC | firmware | FOC loop, PWM generation, sensor reading |
-| Haptic Modes | firmware | Torque computation for each mode |
-| Comms | firmware | Serial protocol, command parsing, position reporting |
-| Button | firmware | Debounce, mode cycling, future: double/long press |
-| SmartKnobDriver | software/smartknob | Serial connection, thread-safe send/receive, callbacks |
-| WindowsLink | software/smartknob | Maps position to Windows functions, manages integrations |
-| Integrations | software/smartknob/integrations | Individual Windows API wrappers |
-| Context | software/smartknob/context | Active window detection, preset routing |
-| GUI | software/gui | User interface for manual control and monitoring |
+### Firmware (`PoC/firmware/src/`)
+
+| Module | File(s) | Responsibility |
+|--------|---------|----------------|
+| Config | `config.h`, `config.cpp` | Pin definitions, hardware constants, `HapticMode` enum, runtime parameter defaults |
+| SimpleFOC | via library | FOC loop, PWM generation, sensor reading |
+| Haptic Modes | `haptics.h`, `haptics.cpp` | 4 torque computation functions (haptic, inertia, spring, bounded) with inertia state |
+| Comms | `comms.h`, `comms.cpp` | 19 serial command handlers, position reporting, Commander setup, startup banner |
+| Button | `button.h`, `button.cpp` | `ButtonState` struct, debounced input, mode cycling |
+| Main | `main.cpp` | ~115 lines — hardware object definitions, `setup()`, `loop()` glue |
+
+> **Build config:** `platformio.ini` lives at the **repo root** with `[platformio]` section path overrides pointing to `PoC/firmware/` subdirectories. Run `pio run` from the repo root.
+
+### Software (`PoC/software/`)
+
+Two Python packages installed via `pip install -e PoC/software/`:
+
+| Package | Location | Platform | Responsibility |
+|---------|----------|----------|----------------|
+| `smartknob` | `software/smartknob/` | Cross-platform (pyserial only) | Reusable driver library |
+| `smartknob_windows` | `software/smartknob_windows/` | Windows only | GUI + Windows integrations |
+
+| Component | Package / Location | Responsibility |
+|-----------|-------------------|----------------|
+| SmartKnobDriver | `smartknob/driver.py` | Thread-safe serial connection, callbacks, 20+ parameter methods |
+| Protocol | `smartknob/protocol.py` | `HapticMode` enum, command/response constants, `MODE_PARAMETERS` dict |
+| WindowsLink | `smartknob_windows/windows_link.py` | Maps knob position to Windows functions, manages integrations |
+| Integrations | `smartknob_windows/integrations/` | Individual Windows API wrappers (volume, brightness, scroll, zoom) |
+| Context | `smartknob_windows/context/` | Active window detection, preset routing (Phase 2) |
+| GUI | `smartknob_windows/gui/app.py` | Tkinter UI for manual control, monitoring, and Windows Link |
 
 ## Hardware
 

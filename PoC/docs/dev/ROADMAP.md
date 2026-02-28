@@ -17,18 +17,30 @@ Separate learning material from PoC code. Separate firmware from Windows driver/
 | Verify GUI loads from new location | ✓ Done |
 | Clean up old files from root | ✓ Done |
 
-## Phase 1: Firmware Modularization + Driver API
+## Phase 1: Firmware Modularization + Driver API — **Complete** ✓
 
 Split `main.cpp` into modules. Extract serial communication from GUI into reusable `SmartKnobDriver`.
 
+### Phase 1A: Firmware Modularization — ✅ Complete
+
 | Task | Status |
 |------|--------|
-| Split `main.cpp` into `config.h`, `haptics.h/cpp`, `comms.h/cpp`, `button.h/cpp` | Not started |
-| Verify firmware builds and all 4 modes work | Not started |
-| Create `SmartKnobDriver` class (serial connect, thread-safe send/receive, callbacks) | Not started |
-| Create `protocol.py` (command constants, ACK parsing) | Not started |
-| Refactor GUI to use `SmartKnobDriver` | Not started |
-| Create `driver-api.md` | Not started |
+| Split `main.cpp` into `config.h`, `haptics.h/cpp`, `comms.h/cpp`, `button.h/cpp` | ✓ Done |
+| Refactor `main.cpp` to ~155-line glue code | ✓ Done |
+| Verify firmware builds (17.5% Flash / 2.5% RAM, zero warnings) | ✓ Done |
+| Add C++ concepts section to GETTING-STARTED.md | ✓ Done |
+
+### Phase 1B: Python Driver API — ✅ Complete
+
+| Task | Status |
+|------|--------|
+| Create `protocol.py` (constants, `HapticMode` enum, `MODE_PARAMETERS`, `print_help()`) | ✓ Done |
+| Create `SmartKnobDriver` class (thread-safe serial, callbacks, 20+ parameter methods) | ✓ Done |
+| Refactor GUI to use `SmartKnobDriver` | ✓ Done |
+| Create `driver-api.md` | ✓ Done |
+| Restructure into `smartknob/` (driver) + `smartknob_windows/` (app) packages | ✓ Done |
+| Replace convergence polling with `on_seek_done` callback | ✓ Done |
+| Add `*.egg-info/` to `.gitignore`, split `pyproject.toml` deps | ✓ Done |
 
 ## Phase 2: Context-Aware Switching + Button Shortcuts
 

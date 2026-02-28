@@ -1,17 +1,18 @@
 """
-SmartKnob Simple GUI - 2 Modes Only
-Haptic (detents) and Inertia modes with basic parameter controls.
+SmartKnob GUI — Tkinter frontend for SmartKnobDriver.
+
+All serial communication is handled by SmartKnobDriver (smartknob.driver).
+This file is pure GUI: widgets, layout, and event wiring.
 """
 
 import tkinter as tk
 from tkinter import ttk
-import serial
-import serial.tools.list_ports
-import threading
-import time
+
+from smartknob.driver import SmartKnobDriver
+from smartknob.protocol import HapticMode
 
 try:
-    from smartknob.windows_link import WindowsLink
+    from smartknob_windows.windows_link import WindowsLink
     WINDOWS_LINK_AVAILABLE = True
 except ImportError:
     WINDOWS_LINK_AVAILABLE = False
@@ -22,10 +23,15 @@ class SmartKnobGUI:
         self.root.title("SmartKnob Simple")
         self.root.geometry("600x700")  # Smaller window, content is scrollable
         
-        self.serial = None
-        self.running = False
+        # Serial driver (GUI-independent, thread-safe)
+        self.driver = SmartKnobDriver()
+        self.driver.on_position = self._on_driver_position
+        self.driver.on_ack = self._on_driver_ack
+        self.driver.on_seek_done = self._on_driver_seek_done
+        self.driver.on_raw = self._on_driver_raw
+
         self.current_angle = 0.0
-        self._convergence_cancelled = False
+        self._pending_zoom_data: dict | None = None  # Tracks pending zoom link
         
         # Windows integration
         if WINDOWS_LINK_AVAILABLE:
@@ -311,7 +317,7 @@ class SmartKnobGUI:
         self._refresh_ports()
     
     def _refresh_ports(self):
-        ports = [p.device for p in serial.tools.list_ports.comports()]
+        ports = SmartKnobDriver.list_ports()
         self.port_combo['values'] = ports
         if ports:
             self.port_combo.current(0)
@@ -355,7 +361,7 @@ class SmartKnobGUI:
     
     def _link_windows(self):
         """Link motor to selected Windows function."""
-        if not self.windows_link or not self.serial:
+        if not self.windows_link or not self.driver.is_connected:
             self._log("Cannot link: Not connected or Windows link unavailable")
             return
         
@@ -378,8 +384,8 @@ class SmartKnobGUI:
                 self._log(f"Linking to volume (currently {current_val}%)")
                 
                 # Switch to Bounded mode and seek to current volume position
-                self._send("O")  # Bounded mode
-                self._send(f"Z{target_angle:.1f}")  # Seek to position
+                self.driver.set_mode(HapticMode.BOUNDED)
+                self.driver.seek(target_angle)
                 
                 # Update UI
                 self.win_link_status.config(text="● Volume", foreground="green")
@@ -416,8 +422,8 @@ class SmartKnobGUI:
                 self._log(f"Linking to brightness (currently {current_val}%)")
                 
                 # Switch to Bounded mode and seek to current brightness position
-                self._send("O")  # Bounded mode
-                self._send(f"Z{target_angle:.1f}")  # Seek to position
+                self.driver.set_mode(HapticMode.BOUNDED)
+                self.driver.seek(target_angle)
                 
                 # Update UI
                 self.win_link_status.config(text="● Brightness", foreground="green")
@@ -443,7 +449,7 @@ class SmartKnobGUI:
                 self._log("Linking to mouse scroll (Inertia mode)")
                 
                 # Switch to Inertia mode for infinite rotation with momentum
-                self._send("I")
+                self.driver.set_mode(HapticMode.INERTIA)
                 
                 # Update UI
                 self.win_link_status.config(text="● Scroll", foreground="green")
@@ -479,23 +485,18 @@ class SmartKnobGUI:
                 for btn in self.mode_buttons:
                     btn.config(state="disabled")
                 
-                # Start seeking to 0 degrees, then wait for convergence
-                self._send("Z0")
+                # Store zoom data — on_seek_done will complete the link
+                self._pending_zoom_data = {"zoom_percent": current_zoom}
+                
+                # Seek to 0°; on_seek_done callback will finish setup
+                self.driver.seek_zero()
                 self._log("Seeking to 0°...")
                 self.win_link_status.config(text="○ Seeking...", foreground="orange")
-                self.win_volume_label.config(text=f"Target: 0°")
-                
-                # Wait for convergence then activate spring mode
-                self._wait_for_convergence(
-                    target_angle=0.0,
-                    tolerance=2.0,
-                    timeout_ms=5000,
-                    on_success=lambda: self._complete_zoom_link(current_zoom),
-                    on_timeout=lambda: self._zoom_link_timeout()
-                )
+                self.win_volume_label.config(text="Target: 0°")
                 
             except Exception as e:
                 self._log(f"Lens zoom link failed: {e}")
+                self._pending_zoom_data = None
                 self.windows_link.unlink()
     
     def _unlink_windows(self):
@@ -503,8 +504,8 @@ class SmartKnobGUI:
         if self.windows_link:
             self.windows_link.unlink()
         
-        # Cancel any pending convergence check
-        self._convergence_cancelled = True
+        # Cancel any pending zoom link
+        self._pending_zoom_data = None
         
         # Update UI
         self.win_link_status.config(text="○ Not Linked", foreground="gray")
@@ -518,59 +519,19 @@ class SmartKnobGUI:
         
         self._log("Windows link disconnected")
     
-    def _wait_for_convergence(self, target_angle, tolerance, timeout_ms, on_success, on_timeout):
-        """Wait for motor to reach target angle within tolerance."""
-        self._convergence_cancelled = False
-        start_time = time.time()
-        
-        def check():
-            if self._convergence_cancelled:
-                return
-            
-            elapsed_ms = (time.time() - start_time) * 1000
-            if elapsed_ms > timeout_ms:
-                on_timeout()
-                return
-            
-            # Check if within tolerance
-            if abs(self.current_angle - target_angle) <= tolerance:
-                on_success()
-                return
-            
-            # Update progress
-            self.win_volume_label.config(text=f"Position: {self.current_angle:.1f}° → 0°")
-            
-            # Check again in 50ms
-            self.root.after(50, check)
-        
-        # Start checking
-        self.root.after(50, check)
-    
     def _complete_zoom_link(self, current_zoom):
-        """Called when motor has converged to 0° - activate spring mode."""
-        self._send("C")  # Spring mode (centers at current position = 0)
+        """Called when motor has reached 0° — activate spring mode for zoom."""
+        self.driver.set_mode(HapticMode.SPRING)
         
         # Update UI
         self.win_link_status.config(text="● Lens", foreground="green")
         self.win_volume_label.config(text=f"Lens: {current_zoom}%")
         self.unlink_btn.config(state="normal")
         
-        self._log("Converged at 0°! Spring mode active. Turn to zoom")
-    
-    def _zoom_link_timeout(self):
-        """Called if motor doesn't reach 0° in time."""
-        self._log("Warning: Convergence timeout - activating spring at current position")
-        
-        # Activate spring mode anyway
-        self._send("C")
-        
-        current_zoom = self.windows_link.get_current_zoom_percent()
-        self.win_link_status.config(text="● Lens", foreground="green")
-        self.win_volume_label.config(text=f"Lens: {current_zoom}%")
-        self.unlink_btn.config(state="normal")
+        self._log("Seek done! Spring mode active. Turn to zoom")
 
     def _toggle_connect(self):
-        if self.serial and self.serial.is_open:
+        if self.driver.is_connected:
             self._disconnect()
         else:
             self._connect()
@@ -581,59 +542,43 @@ class SmartKnobGUI:
             self._log("No port selected")
             return
         try:
-            self.serial = serial.Serial(port, 115200, timeout=0.1)
-            self.running = True
+            self.driver.connect(port)
             self.connect_btn.config(text="Disconnect")
             self.status_label.config(text="Connected", foreground="green")
             self._log(f"Connected to {port}")
             
-            # Start reader thread
-            self.reader_thread = threading.Thread(target=self._read_serial, daemon=True)
-            self.reader_thread.start()
-            
             # Query state
-            self._send("Q")
+            self.driver.query_state()
         except Exception as e:
             self._log(f"Connection failed: {e}")
     
     def _disconnect(self):
-        self.running = False
-        if self.serial:
-            self.serial.close()
+        self.driver.disconnect()
         self.connect_btn.config(text="Connect")
         self.status_label.config(text="Disconnected", foreground="red")
         self._log("Disconnected")
     
-    def _send(self, cmd):
-        if self.serial and self.serial.is_open:
-            self.serial.write(f"{cmd}\n".encode())
-            self._log(f"TX: {cmd}")
+    # === Driver callbacks (called from reader thread — schedule to GUI) ===
     
-    def _read_serial(self):
-        while self.running:
-            try:
-                if self.serial and self.serial.in_waiting:
-                    line = self.serial.readline().decode().strip()
-                    if line:
-                        self._process_line(line)
-            except Exception as e:
-                self._log(f"Read error: {e}")
-            time.sleep(0.01)
-    
-    def _process_line(self, line):
-        if line.startswith("P"):
-            # Position update
-            try:
-                angle = float(line[1:])
-                self.current_angle = angle
-                self.root.after(0, lambda a=angle: self._update_position_display(a))
-            except ValueError:
-                pass
-        elif line.startswith("A:"):
-            # Acknowledgment
-            self._log(f"ACK: {line[2:]}")
-        else:
-            self._log(f"RX: {line}")
+    def _on_driver_position(self, angle_deg: float) -> None:
+        """Handle position update from driver (reader thread)."""
+        self.current_angle = angle_deg
+        self.root.after(0, lambda a=angle_deg: self._update_position_display(a))
+
+    def _on_driver_ack(self, ack_text: str) -> None:
+        """Handle acknowledgment from driver (reader thread)."""
+        self._log(f"ACK: {ack_text}")
+
+    def _on_driver_seek_done(self) -> None:
+        """Handle seek completion from driver (reader thread)."""
+        if self._pending_zoom_data:
+            zoom_pct = self._pending_zoom_data["zoom_percent"]
+            self._pending_zoom_data = None
+            self.root.after(0, lambda: self._complete_zoom_link(zoom_pct))
+
+    def _on_driver_raw(self, line: str) -> None:
+        """Handle unrecognised serial line from driver (reader thread)."""
+        self._log(f"RX: {line}")
     
     def _update_position_display(self, angle):
         """Update position display and process Windows link if active."""
@@ -678,85 +623,85 @@ class SmartKnobGUI:
                 self.log_text.delete("1.0", "50.0")
         self.root.after(0, _append)
     
-    # === Command senders ===
+    # === Command senders (delegate to driver) ===
     def _set_mode(self):
         mode = self.mode_var.get()
         if mode == "HAPTIC":
-            self._send("H")
+            self.driver.set_mode(HapticMode.HAPTIC)
         elif mode == "INERTIA":
-            self._send("I")
+            self.driver.set_mode(HapticMode.INERTIA)
         elif mode == "SPRING":
-            self._send("C")
+            self.driver.set_mode(HapticMode.SPRING)
             # Update center display when entering spring mode
             self.spring_center_label.config(text=f"{self.current_angle:.1f}°")
         elif mode == "BOUNDED":
-            self._send("O")
+            self.driver.set_mode(HapticMode.BOUNDED)
     
     def _send_detent_count(self, event=None):
-        self._send(f"S{int(self.detent_count_var.get())}")
+        self.driver.set_detent_count(int(self.detent_count_var.get()))
     
     def _send_detent_strength(self, event=None):
-        self._send(f"D{self.detent_strength_var.get():.2f}")
+        self.driver.set_detent_strength(self.detent_strength_var.get())
     
     def _send_inertia(self, event=None):
-        self._send(f"J{self.inertia_var.get():.2f}")
+        self.driver.set_inertia(self.inertia_var.get())
     
     def _send_damping(self, event=None):
-        self._send(f"B{self.damping_var.get():.2f}")
+        self.driver.set_damping(self.damping_var.get())
     
     def _send_coupling(self, event=None):
-        self._send(f"K{self.coupling_var.get():.2f}")
+        self.driver.set_coupling(self.coupling_var.get())
     
     def _send_spring_stiffness(self, event=None):
-        self._send(f"W{self.spring_stiffness_var.get():.2f}")
+        self.driver.set_spring_stiffness(self.spring_stiffness_var.get())
     
     def _send_spring_damping(self, event=None):
-        self._send(f"G{self.spring_damping_var.get():.2f}")
+        self.driver.set_spring_damping(self.spring_damping_var.get())
     
     def _send_set_center(self):
-        self._send("E")  # Empty = use current position
+        self.driver.set_spring_center()  # None = use current position
         # Update the center display with current angle
         self.spring_center_label.config(text=f"{self.current_angle:.1f}°")
     
     def _send_lower_bound(self, event=None):
         try:
             val = float(self.bound_lower_var.get())
-            self._send(f"L{val:.1f}")
+            self.driver.set_lower_bound(val)
         except ValueError:
             self._log("Invalid lower bound value")
     
     def _send_upper_bound(self, event=None):
         try:
             val = float(self.bound_upper_var.get())
-            self._send(f"U{val:.1f}")
+            self.driver.set_upper_bound(val)
         except ValueError:
             self._log("Invalid upper bound value")
     
     def _send_wall_strength(self, event=None):
-        self._send(f"A{self.wall_strength_var.get():.2f}")
+        self.driver.set_wall_strength(self.wall_strength_var.get())
     
     def _send_seek_angle(self, event=None):
         try:
             angle = float(self.target_angle_var.get())
-            self._send(f"Z{angle:.1f}")
+            self.driver.seek(angle)
         except ValueError:
             self._log("Invalid angle value")
     
     def _send_seek_zero(self):
         self.target_angle_var.set("0")
-        self._send("Z0")
+        self.driver.seek_zero()
     
     def _send_pid_p(self, event=None):
-        self._send(f"MPP{self.pid_p_var.get():.2f}")
+        self.driver.set_pid_p(self.pid_p_var.get())
     
     def _send_pid_i(self, event=None):
-        self._send(f"MPI{self.pid_i_var.get():.2f}")
+        self.driver.set_pid_i(self.pid_i_var.get())
     
     def _send_pid_d(self, event=None):
-        self._send(f"MPD{self.pid_d_var.get():.2f}")
+        self.driver.set_pid_d(self.pid_d_var.get())
     
     def _send_vel_limit(self, event=None):
-        self._send(f"MVL{self.vel_limit_var.get():.2f}")
+        self.driver.set_velocity_limit(self.vel_limit_var.get())
     
     # PID label update callbacks (called on every slider change)
     def _on_pid_p_change(self, val):

@@ -21,9 +21,10 @@ The main deliverable. A complete haptic knob system that:
 
 | Subfolder | What's inside |
 |-----------|---------------|
-| [PoC/firmware/](PoC/firmware/) | PlatformIO C++ project — STM32 firmware with FOC motor control, haptic modes, and serial communication |
-| [PoC/software/](PoC/software/) | Python package — `smartknob` library with Windows integrations (volume, brightness, scroll, zoom), Tkinter GUI, and preset/context configuration |
-| [PoC/docs/](PoC/docs/) | Architecture diagram, serial protocol specification, and development roadmap |
+| [PoC/firmware/](PoC/firmware/) | PlatformIO C++ project — modular STM32 firmware (config, haptics, comms, button) with FOC motor control |
+| [PoC/software/smartknob/](PoC/software/smartknob/) | Cross-platform Python driver — `SmartKnobDriver` class, protocol constants, callbacks (pyserial only) |
+| [PoC/software/smartknob_windows/](PoC/software/smartknob_windows/) | Windows app — Tkinter GUI, system integrations (volume, brightness, scroll, zoom), preset/context config |
+| [PoC/docs/](PoC/docs/) | Architecture diagram, serial protocol specification, driver API reference, and dev tracking |
 
 ### [FOC_Learnings/](FOC_Learnings/) — Learning Archive
 
@@ -47,24 +48,22 @@ This folder is read-only reference material — all active development happens i
 
 ### Firmware
 ```bash
-cd PoC/firmware
-pio run              # Build
+pio run              # Build (run from repo root — platformio.ini is here)
 pio run -t upload    # Flash to Nucleo
 pio device monitor   # Serial monitor (115200 baud)
 ```
 
 ### Windows Software
 ```bash
-cd PoC/software
-pip install -r requirements.txt
-python gui/app.py    # Launch GUI
+pip install -e "PoC/software/[windows]"    # Install both packages (editable)
+python -m smartknob_windows.gui.app        # Launch GUI
 ```
 
 Connect to the STM32 via the GUI's serial port dropdown, select a haptic mode, and start turning the knob. Use the "Windows Link" section to map knob rotation to system controls.
 
 ## Current Status
 
-**Phase 0 (Repo Refactor)** is complete. The codebase has been reorganized from a flat structure into the clean `PoC/` + `FOC_Learnings/` layout. Next up is **Phase 1: Firmware Modularization + Driver API** — splitting the monolithic `main.cpp` into modular C++ files and extracting a reusable Python driver from the GUI.
+**Phases 0 and 1** are complete. The codebase has been reorganized into `PoC/` + `FOC_Learnings/`, firmware split into 5 modular C++ files, and a reusable `SmartKnobDriver` API extracted into its own cross-platform package. Next up is **Phase 2: Context-Aware Switching** — auto-detecting the active Windows application to switch knob behavior automatically.
 
 See [PoC/docs/dev/ROADMAP.md](PoC/docs/dev/ROADMAP.md) for the full development roadmap.
 

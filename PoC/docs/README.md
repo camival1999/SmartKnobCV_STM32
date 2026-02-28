@@ -14,6 +14,7 @@ Technical documentation and development tracking for the SmartKnob Proof of Conc
 ## Guides
 
 - [GETTING-STARTED.md](guides/GETTING-STARTED.md) — Clone, set up, and run the project
+- [driver-api.md](guides/driver-api.md) — SmartKnobDriver API reference (quick start, callbacks, migration guide)
 
 ## Development Tracking
 

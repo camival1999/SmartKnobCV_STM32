@@ -111,6 +111,8 @@ This project was inspired by [**Scott Bezek's SmartKnob**](https://github.com/sc
 
 ## PlatformIO Configuration
 
+> **Note:** `platformio.ini` lives at the **repo root** (not in `PoC/firmware/`) with `[platformio]` section path overrides pointing to `PoC/firmware/` subdirectories. Run all `pio` commands from the repo root.
+
 ```ini
 [env:nucleo_l452re]
 platform = ststm32
@@ -516,15 +518,21 @@ See [src/main.cpp](src/main.cpp) for the full annotated source. Backup files in 
 
 ## PC Control Software (Windows)
 
-A Python GUI application in `tools/` connects the SmartKnob to Windows system functions.
+Two Python packages in `PoC/software/` connect the SmartKnob to Windows system functions.
 
 ### Quick Start
 
 ```bash
-cd tools
-pip install -r requirements.txt
-python smartknob_simple.py
+pip install -e "PoC/software/[windows]"    # Install both packages (editable)
+python -m smartknob_windows.gui.app        # Launch GUI
 ```
+
+### Package Architecture
+
+| Package | Location | Platform | Purpose |
+|---------|----------|----------|---------|
+| `smartknob` | `PoC/software/smartknob/` | Cross-platform (pyserial only) | Reusable driver library — `SmartKnobDriver` class, protocol constants, callbacks |
+| `smartknob_windows` | `PoC/software/smartknob_windows/` | Windows only | GUI + Windows integrations — imports `smartknob` for serial communication |
 
 ### Windows Integration Features
 
@@ -539,24 +547,29 @@ python smartknob_simple.py
 
 - **Volume & Brightness**: Straightforward bounded-to-percentage mapping. Implemented in one iteration with no issues.
 - **Smooth Scroll**: Uses smooth scrolling (not notched line-by-line) for a fluid experience in documents and code editors. Avoids sudden jumps regardless of rotation speed.
-- **Zoom**: Experimental feature using the Windows Magnification API. Works but is somewhat finnicky; not a priority for further development.
+- **Zoom**: Experimental feature using the Windows Magnification API. Uses `on_seek_done` callback for target-reached detection.
 
 ### File Structure
 
-| File                    | Purpose                                   |
-| ----------------------- | ----------------------------------------- |
-| `smartknob_simple.py`   | Main GUI application                      |
-| `windows_link.py`       | Links motor position to Windows functions |
-| `volume_control.py`     | Windows Core Audio API wrapper (pycaw)    |
-| `brightness_control.py` | Display brightness via WMI                |
-| `scroll_control.py`     | Mouse wheel simulation (smooth scrolling) |
-| `zoom_control.py`       | Screen magnification API                  |
-| `requirements.txt`      | Python dependencies                       |
+| File | Package | Purpose |
+|------|---------|---------|
+| `smartknob/driver.py` | `smartknob` | `SmartKnobDriver` — thread-safe serial, callbacks, 20+ parameter methods |
+| `smartknob/protocol.py` | `smartknob` | `HapticMode` enum, command/response constants, `print_help()` |
+| `smartknob_windows/gui/app.py` | `smartknob_windows` | Tkinter GUI application |
+| `smartknob_windows/windows_link.py` | `smartknob_windows` | Maps motor position to Windows functions |
+| `smartknob_windows/integrations/volume.py` | `smartknob_windows` | Windows Core Audio API wrapper (pycaw) |
+| `smartknob_windows/integrations/brightness.py` | `smartknob_windows` | Display brightness via WMI |
+| `smartknob_windows/integrations/scroll.py` | `smartknob_windows` | Mouse wheel simulation (smooth scrolling) |
+| `smartknob_windows/integrations/zoom.py` | `smartknob_windows` | Screen magnification API |
+| `pyproject.toml` | — | Package definitions, dependencies, build config |
 
 ### Dependencies
 
 ```
+# Core (cross-platform — smartknob package)
 pyserial      # Serial communication
+
+# Windows extras (smartknob_windows package)
 pycaw         # Windows audio control
 comtypes      # Required by pycaw
 wmi           # Brightness control
