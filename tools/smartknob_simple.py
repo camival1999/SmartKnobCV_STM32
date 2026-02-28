@@ -108,7 +108,7 @@ class SmartKnobGUI:
         # Detent Count
         ttk.Label(haptic_frame, text="Detent Count:").grid(row=0, column=0, sticky="w")
         self.detent_count_var = tk.IntVar(value=36)
-        self.detent_count_scale = ttk.Scale(haptic_frame, from_=2, to=64, variable=self.detent_count_var,
+        self.detent_count_scale = ttk.Scale(haptic_frame, from_=2, to=72, variable=self.detent_count_var,
                                             orient="horizontal", length=200)
         self.detent_count_scale.grid(row=0, column=1, padx=5)
         self.detent_count_label = ttk.Label(haptic_frame, text="36")

@@ -671,4 +671,4 @@ This project is proprietary software. **All rights reserved.**
 - Commercial use, modification, and redistribution are **prohibited** without written permission
 - See [LICENSE](LICENSE) for full terms
 
-*Copyright (c) 2025 Camilo Valencia*
+*Copyright (c) 2026 Camilo Valencia*
