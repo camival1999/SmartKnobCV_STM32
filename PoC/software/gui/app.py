@@ -11,7 +11,7 @@ import threading
 import time
 
 try:
-    from windows_link import WindowsLink
+    from smartknob.windows_link import WindowsLink
     WINDOWS_LINK_AVAILABLE = True
 except ImportError:
     WINDOWS_LINK_AVAILABLE = False

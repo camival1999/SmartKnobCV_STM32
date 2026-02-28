@@ -1,0 +1,32 @@
+{
+  "contexts": {
+    "Spotify.exe": {
+      "integration": "volume",
+      "preset": "VOLUME_KNOB"
+    },
+    "chrome.exe": {
+      "integration": "scroll",
+      "preset": "SMOOTH_SCROLL"
+    },
+    "firefox.exe": {
+      "integration": "scroll",
+      "preset": "SMOOTH_SCROLL"
+    },
+    "msedge.exe": {
+      "integration": "scroll",
+      "preset": "SMOOTH_SCROLL"
+    },
+    "Photoshop.exe": {
+      "integration": "zoom",
+      "preset": "ZOOM_DIAL"
+    },
+    "POWERPNT.EXE": {
+      "integration": "slides",
+      "preset": "CLICKY_SELECTOR"
+    },
+    "__default__": {
+      "integration": "scroll",
+      "preset": "SMOOTH_SCROLL"
+    }
+  }
+}

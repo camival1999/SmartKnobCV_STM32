@@ -1,0 +1,45 @@
+{
+  "presets": {
+    "VOLUME_KNOB": {
+      "name": "Volume Knob",
+      "mode": "bounded",
+      "detent_count": 20,
+      "detent_strength": 2.0,
+      "bound_min": -60.0,
+      "bound_max": 60.0,
+      "wall_strength": 20.0
+    },
+    "SMOOTH_SCROLL": {
+      "name": "Smooth Scroll",
+      "mode": "inertia",
+      "inertia": 3.0,
+      "damping": 0.5,
+      "coupling": 30.0
+    },
+    "CLICKY_SELECTOR": {
+      "name": "Clicky Selector",
+      "mode": "haptic",
+      "detent_count": 12,
+      "detent_strength": 3.0
+    },
+    "ZOOM_DIAL": {
+      "name": "Zoom Dial",
+      "mode": "spring",
+      "spring_stiffness": 8.0,
+      "spring_damping": 0.2
+    },
+    "FINE_ENCODER": {
+      "name": "Fine Encoder",
+      "mode": "haptic",
+      "detent_count": 72,
+      "detent_strength": 0.8
+    },
+    "FREE_SPIN": {
+      "name": "Free Spin",
+      "mode": "inertia",
+      "inertia": 1.0,
+      "damping": 0.1,
+      "coupling": 20.0
+    }
+  }
+}

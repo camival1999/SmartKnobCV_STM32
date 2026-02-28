@@ -5,10 +5,10 @@ Manages the connection between SmartKnob motor position and Windows system funct
 """
 
 import time
-from volume_control import VolumeController
-from brightness_control import BrightnessController
-from scroll_control import scroll_smooth, WHEEL_DELTA
-from zoom_control import ZoomController, MIN_ZOOM, MAX_ZOOM
+from smartknob.integrations.volume import VolumeController
+from smartknob.integrations.brightness import BrightnessController
+from smartknob.integrations.scroll import scroll_smooth, WHEEL_DELTA
+from smartknob.integrations.zoom import ZoomController, MIN_ZOOM, MAX_ZOOM
 
 
 class WindowsLink:

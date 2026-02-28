@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: smartknob
+Version: 0.0.2
+Summary: Python driver and Windows integrations for the SmartKnob haptic controller
+Author: Camilo Valencia
+License: Proprietary
+Requires-Python: >=3.10
+Requires-Dist: pyserial>=3.5
+Requires-Dist: pycaw>=20230407
+Requires-Dist: comtypes>=1.2.0
+Requires-Dist: wmi>=1.5.1
+Provides-Extra: gui
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"

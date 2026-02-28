@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smartknob"
+version = "0.0.2"
+description = "Python driver and Windows integrations for the SmartKnob haptic controller"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [{name = "Camilo Valencia"}]
+
+dependencies = [
+    "pyserial>=3.5",
+    "pycaw>=20230407",
+    "comtypes>=1.2.0",
+    "wmi>=1.5.1",
+]
+
+[project.optional-dependencies]
+gui = [
+    # tkinter is included with Python — no extra dep needed
+]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["smartknob*"]

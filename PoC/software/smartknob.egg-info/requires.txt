@@ -1,0 +1,9 @@
+pyserial>=3.5
+pycaw>=20230407
+comtypes>=1.2.0
+wmi>=1.5.1
+
+[dev]
+pytest>=7.0
+
+[gui]
